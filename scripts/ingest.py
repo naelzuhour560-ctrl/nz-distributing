@@ -57,14 +57,15 @@ def load_products(sb):
 
     # Pass 1: invoice codes → description (first occurrence wins)
     invoice_desc = {}
-    with open(os.path.join(DATA_DIR, "invoices.csv"), newline="", encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            upc_field = row["UPC"].strip()
-            parts = upc_field.split(" - ", 1)
-            code = parts[0].strip()
-            desc = parts[1].strip() if len(parts) > 1 else upc_field
-            if code not in invoice_desc:
-                invoice_desc[code] = desc
+    for invoice_file in ("invoices_sale.csv", "invoices_return.csv", "invoices_buyback.csv"):
+        with open(os.path.join(DATA_DIR, invoice_file), newline="", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                upc_field = row["UPC"].strip()
+                parts = upc_field.split(" - ", 1)
+                code = parts[0].strip()
+                desc = parts[1].strip() if len(parts) > 1 else upc_field
+                if code not in invoice_desc:
+                    invoice_desc[code] = desc
 
     # Pass 2: order codes → Product Name (first occurrence wins, preferred)
     order_name = {}
@@ -148,30 +149,37 @@ def load_invoice_lines(sb):
 
     store_lookup = build_store_lookup(sb)
 
-    rows = []
-    with open(os.path.join(DATA_DIR, "invoices.csv"), newline="", encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            upc_field = row["UPC"].strip()
-            code = upc_field.split(" - ", 1)[0].strip()
-            location_id = int(row["Location ID"].strip())
-            store_name = row["Store Name"].strip()
-            store_id = store_lookup.get((location_id, store_name))
+    invoice_files = [
+        ("invoices_sale.csv",    "Sale"),
+        ("invoices_return.csv",  "Return"),
+        ("invoices_buyback.csv", "Buyback"),
+    ]
 
-            rows.append(
-                {
-                    "invoice_number": row["Invoice number"].strip(),
-                    "calendar_date": parse_date(row["Calendar Date"]),
-                    "location_id": location_id,
-                    "store_name": store_name,
-                    "store_id": store_id,
-                    "upc": code,
-                    "units": int(row["Units"].strip()),
-                    "distributor_unit_cost": float_or_none(row["Distributor Unit Cost"]),
-                    "total_promotion_allowance": float_or_none(row["Total Promotion Allowance"]),
-                    "total_wholesale_dollars": float_or_none(row["Total Wholesale Dollars"]),
-                    "transaction_type": None,
-                }
-            )
+    rows = []
+    for filename, transaction_type in invoice_files:
+        with open(os.path.join(DATA_DIR, filename), newline="", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                upc_field = row["UPC"].strip()
+                code = upc_field.split(" - ", 1)[0].strip()
+                location_id = int(row["Location ID"].strip())
+                store_name = row["Store Name"].strip()
+                store_id = store_lookup.get((location_id, store_name))
+
+                rows.append(
+                    {
+                        "invoice_number": row["Invoice number"].strip(),
+                        "calendar_date": parse_date(row["Calendar Date"]),
+                        "location_id": location_id,
+                        "store_name": store_name,
+                        "store_id": store_id,
+                        "upc": code,
+                        "units": int(row["Units"].strip()),
+                        "distributor_unit_cost": float_or_none(row["Distributor Unit Cost"]),
+                        "total_promotion_allowance": float_or_none(row["Total Promotion Allowance"]),
+                        "total_wholesale_dollars": float_or_none(row["Total Wholesale Dollars"]),
+                        "transaction_type": transaction_type,
+                    }
+                )
 
     total = len(rows)
     inserted = 0
@@ -249,16 +257,16 @@ def verify(sb, invoice_rows, order_rows):
     # Invoice lines — row count from DB; sums from in-memory rows
     r = sb.table("invoice_lines").select("id", count="exact").execute()
     inv_db_count = r.count
-    flag_count = check("invoice_lines rows", inv_db_count, 118873)
-    print(f"invoice_lines: {inv_db_count:,} rows  (expect 118,873){flag_count}")
+    flag_count = check("invoice_lines rows", inv_db_count, 119015)
+    print(f"invoice_lines: {inv_db_count:,} rows  (expect 119,015){flag_count}")
 
     inv_units = sum(r["units"] for r in invoice_rows)
-    flag_units = check("invoice units", inv_units, 1349561)
-    print(f"               sum(units) = {inv_units:,}  (expect 1,349,561){flag_units}")
+    flag_units = check("invoice units", inv_units, 1352000)
+    print(f"               sum(units) = {inv_units:,}  (expect 1,352,000){flag_units}")
 
     inv_dollars = sum(r["total_wholesale_dollars"] or 0.0 for r in invoice_rows)
-    flag_dollars = check("invoice dollars", inv_dollars, 2792886, tolerance=500)
-    print(f"               sum(total_wholesale_dollars) = ${inv_dollars:,.2f}  (expect ≈$2,792,886){flag_dollars}")
+    flag_dollars = check("invoice dollars", inv_dollars, 2797507, tolerance=500)
+    print(f"               sum(total_wholesale_dollars) = ${inv_dollars:,.2f}  (expect ≈$2,797,507){flag_dollars}")
 
     null_rows = [r for r in invoice_rows if r["store_id"] is None]
     null_count = len(null_rows)
