@@ -36,7 +36,7 @@ Five tables in Supabase:
 |---|---|---|
 | products | 218 | Union of invoice and order SKUs |
 | stores | 103 | All locations from last-sold roster |
-| invoice_lines | 118,873 | Jan 2025 – May 2026 |
+| invoice_lines | 119,015 | Jan 2025 – May 2026; Sale / Return / Buyback |
 | order_lines | 20,781 | Jan 2025 – May 2026 |
 
 ---
@@ -68,11 +68,43 @@ Source CSVs (`data/`) are gitignored and must be present locally.
 
 ---
 
+## Weekly Ingestion
+
+Each week, re-export the three invoice files from Incorta and re-run the pipeline.
+
+### 1. Export from Incorta
+
+Run three separate exports from the Incorta invoice report, each filtered by Transaction Type.
+All three use the same date range (**1/1/2025 → today**) and the same 9 columns:
+`Calendar Date, Location ID, Store Name, Invoice number, UPC, Units, Distributor Unit Cost, Total Promotion Allowance, Total Wholesale Dollars`
+
+| Filter: Transaction Type | Save as |
+|---|---|
+| `Sale` | `data/invoices_sale.csv` |
+| `Return` | `data/invoices_return.csv` |
+| `Buyback` | `data/invoices_buyback.csv` |
+
+Also re-export if the store roster or orders data has changed:
+- `data/orders.csv` — full orders export (same date range)
+- `data/last_sold.csv` — current store roster
+
+### 2. Run the pipeline
+
+```bash
+source venv/bin/activate
+python scripts/ingest.py
+```
+
+The script clears and reloads `invoice_lines` and `order_lines` on every run.
+Products and stores are upserted (new rows added, existing rows updated).
+Verification checks run automatically — if any baseline total is off, the script exits non-zero with a `FAIL` line for each mismatch.
+
+---
+
 ## Known Limitations
 
 - **~57% of invoice rows have NULL `store_id`**: the Incorta invoice export does not include a store number, so any store name that belongs to a chain (Dollar General, Food Lion, Sheetz, etc.) with multiple locations on the same route cannot be unambiguously resolved to a single store.
-- **Transaction Type not yet captured**: the `transaction_type` column exists on `invoice_lines` but is left NULL pending a corrected data pull from Incorta that includes this field.
-- **`returns_buybacks.csv` intentionally not loaded**: returns/buybacks data is present in `data/` but excluded from Phase 1 ingestion; it will be addressed in a later phase once the schema for that data is finalized.
+- **`returns_buybacks.csv` not loaded**: superseded by the three filtered exports (`invoices_sale.csv`, `invoices_return.csv`, `invoices_buyback.csv`).
 
 ---
 
@@ -80,7 +112,7 @@ Source CSVs (`data/`) are gitignored and must be present locally.
 
 | Phase | Status | Description |
 |---|---|---|
-| 1 — Foundation | ✅ Done | Schema design, CSV ingestion, Supabase load (118K invoice + 21K order rows) |
+| 1 — Foundation | ✅ Done | Schema design, CSV ingestion, Supabase load (119K invoice + 21K order rows) |
 | 2 — Dashboards | Planned | Sales and inventory reporting by route, store, and product |
 | 3 — Forecasting | Planned | Demand forecasting by SKU and store using historical invoice data |
 | 4 — AI Automation | Planned | Route optimization, reorder suggestions, anomaly detection |

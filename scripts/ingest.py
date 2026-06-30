@@ -229,18 +229,16 @@ def load_order_lines(sb):
 # ── Verification ──────────────────────────────────────────────────────────────
 def verify(sb, invoice_rows, order_rows):
     print("\n── Verification ─────────────────────────────────────────────────────")
-    stop = False
+    failures = []
 
     def check(label, actual, expected, tolerance=0):
-        nonlocal stop
         if tolerance:
             ok = abs(actual - expected) <= tolerance
         else:
             ok = actual == expected
-        flag = "" if ok else "  ⚠ UNEXPECTED"
         if not ok:
-            stop = True
-        return flag
+            failures.append(f"FAIL: {label}: got {actual}, expected {expected}")
+        return "" if ok else "  ⚠ FAIL"
 
     # Products (DB count)
     r = sb.table("products").select("upc", count="exact").execute()
@@ -279,8 +277,9 @@ def verify(sb, invoice_rows, order_rows):
     )
 
     sn_nulls = sum(1 for r in invoice_rows if not r.get("store_name"))
-    flag_sn = "" if sn_nulls == 0 else "  ⚠ UNEXPECTED"
-    if sn_nulls: stop = True
+    flag_sn = "" if sn_nulls == 0 else "  ⚠ FAIL"
+    if sn_nulls:
+        failures.append(f"FAIL: store_name NULL/empty: got {sn_nulls}, expected 0")
     print(f"               store_name NULL/empty: {sn_nulls} rows  (expect 0){flag_sn}")
 
     # Order lines — row count from DB; sums from in-memory rows
@@ -298,12 +297,14 @@ def verify(sb, invoice_rows, order_rows):
     print(f"               sum(total_cost) = ${ord_cost:,.2f}  (expect ≈$2,498,556){flag_cost}")
 
     print()
-    if stop:
-        print("⛔  One or more verification totals are materially off.")
-        print("    STOPPING — investigate before trusting this load.")
+    if failures:
+        print("⛔  VERIFICATION FAILED")
+        for f in failures:
+            print(f"    {f}")
+        print("    Investigate before trusting this load.")
         sys.exit(1)
     else:
-        print("✓  All verification checks passed.")
+        print("✅  ALL CHECKS PASSED")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
