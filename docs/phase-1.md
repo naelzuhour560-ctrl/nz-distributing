@@ -200,6 +200,23 @@ If any check fails, the script prints a `FAIL:` line for each failing metric wit
 
 Baselines must be updated manually in `ingest.py` when the source data grows (e.g., after a weekly re-export that adds new invoices). A baseline mismatch on a fresh export is expected and signals that you need to verify the new totals are correct, then update the baselines in the script.
 
+### Data-quality checks (`scripts/quality_check.py`)
+
+A standalone script that validates the loaded data without modifying it. Two severity levels:
+
+**CRITICAL** (exit 1 if any fail):
+- Every `invoice_lines.upc` and `order_lines.upc` exists in `products` (referential integrity)
+- Every `location_id` in both line tables is in `{1483, 2140, 38260, 38265}`
+- Every `invoice_lines.transaction_type` is `Sale`, `Return`, or `Buyback` with zero NULLs
+- All `calendar_date` and `delivery_date` values fall within 2025-01-01 to today
+
+**WARNING** (reported, does not affect exit code):
+- Sale rows with negative units; Return or Buyback rows with positive units
+- Exact-duplicate invoice rows (same invoice_number + upc + units + calendar_date)
+- NULL `store_id` count and percentage
+
+On the current load, all critical checks pass. The only warning is the known NULL `store_id` at 68,681 rows (57.7%).
+
 ---
 
 ## 5. Known Limitations

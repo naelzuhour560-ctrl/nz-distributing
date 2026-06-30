@@ -99,6 +99,14 @@ The script clears and reloads `invoice_lines` and `order_lines` on every run.
 Products and stores are upserted (new rows added, existing rows updated).
 Verification checks run automatically — if any baseline total is off, the script exits non-zero with a `FAIL` line for each mismatch.
 
+### 3. Run data-quality checks (optional)
+
+```bash
+python scripts/quality_check.py
+```
+
+Checks referential integrity (UPCs exist in products), valid location IDs and transaction types, date range (2025-01-01 to today), unit-sign consistency (e.g. returns should not have positive units), exact-duplicate invoice rows, and NULL store_id rate. CRITICAL failures exit non-zero; warnings (like the known 57.7% NULL store_id) are reported but do not affect the exit code.
+
 ---
 
 ## Known Limitations
