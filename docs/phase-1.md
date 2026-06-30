@@ -89,7 +89,7 @@ Upserted on `upc` — safe to re-run.
 
 103 rows. `UNIQUE(location_id, store_name, store_number)` — the composite natural key.
 
-`store_number` is stored as text, including `"0"`. Independent stores (mom-and-pop shops with no chain number) use `"0"` as a sentinel. Chain stores (Dollar General, Food Lion, etc.) carry their real chain store number.
+`store_number` is stored as text, carrying the chain store number where one exists.
 
 Upserted on the composite unique constraint — safe to re-run.
 
