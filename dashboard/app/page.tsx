@@ -10,10 +10,8 @@ export default async function Page() {
   const totalDollars = data?.total_wholesale_dollars as number | null;
 
   return (
-    <main className="p-8 font-sans">
-      <h1 className="text-2xl font-bold mb-4">
-        N&amp;Z Distributing — Connection Test
-      </h1>
+    <div>
+      <h2 className="text-2xl font-bold mb-6">Overview</h2>
       <dl className="space-y-2">
         <div>
           <dt className="text-sm text-zinc-500">Invoice rows</dt>
@@ -39,6 +37,6 @@ export default async function Page() {
           </dd>
         </div>
       </dl>
-    </main>
+    </div>
   );
 }
