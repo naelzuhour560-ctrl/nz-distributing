@@ -1,13 +1,23 @@
 import { supabase } from "@/lib/supabase";
+import RevenueChart from "./revenue-chart";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data } = await supabase.rpc("invoice_lines_totals").single();
+  const [{ data: totals }, { data: monthly }] = await Promise.all([
+    supabase.rpc("invoice_lines_totals").single(),
+    supabase.rpc("monthly_revenue"),
+  ]);
 
-  const rowCount = data?.row_count as number | null;
-  const totalUnits = data?.total_units as number | null;
-  const totalDollars = data?.total_wholesale_dollars as number | null;
+  const rowCount = totals?.row_count as number | null;
+  const totalUnits = totals?.total_units as number | null;
+  const totalDollars = totals?.total_wholesale_dollars as number | null;
+
+  const monthlyRows = (monthly ?? []) as {
+    month: string;
+    net_dollars: number;
+    sale_dollars: number;
+  }[];
 
   return (
     <div>
@@ -37,6 +47,9 @@ export default async function Page() {
           </dd>
         </div>
       </dl>
+
+      <h3 className="text-xl font-bold mt-10 mb-4">Monthly Revenue Trend</h3>
+      <RevenueChart data={monthlyRows} />
     </div>
   );
 }
