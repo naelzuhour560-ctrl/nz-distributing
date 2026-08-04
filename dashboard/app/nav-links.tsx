@@ -9,6 +9,7 @@ const links = [
   { href: "/stores", label: "Stores" },
   { href: "/products", label: "Products" },
   { href: "/routes", label: "Routes" },
+  { href: "/churn", label: "Churn" },
 ];
 
 export default function NavLinks() {
