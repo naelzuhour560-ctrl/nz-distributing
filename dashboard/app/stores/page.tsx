@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,14 @@ export default async function StoresPage() {
           <tbody>
             {rows.map((r) => (
               <tr key={`${r.store_name}-${r.location_id}`} className="border-b border-zinc-800">
-                <td className="py-2 font-mono">{r.store_name}</td>
+                <td className="py-2 font-mono">
+                  <Link
+                    href={`/stores/${r.location_id}/${encodeURIComponent(r.store_name)}`}
+                    className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                  >
+                    {r.store_name}
+                  </Link>
+                </td>
                 <td className="py-2 text-right font-mono">{r.location_id}</td>
                 <td className="py-2 text-right font-mono">{fmt(r.sale_dollars)}</td>
                 <td className="py-2 text-right font-mono">{fmt(r.return_dollars)}</td>
