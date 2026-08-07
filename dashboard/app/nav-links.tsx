@@ -10,6 +10,7 @@ const links = [
   { href: "/products", label: "Products" },
   { href: "/routes", label: "Routes" },
   { href: "/churn", label: "Churn" },
+  { href: "/declining", label: "Declining" },
 ];
 
 export default function NavLinks() {
