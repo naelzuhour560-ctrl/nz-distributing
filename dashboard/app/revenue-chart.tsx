@@ -62,7 +62,10 @@ export default function RevenueChart({ data }: { data: MonthRow[] }) {
           width={70}
         />
         <Tooltip
-          formatter={(value: number) => [fmtTooltipDollars(value), "Net $"]}
+          formatter={(value) => [
+            typeof value === "number" ? fmtTooltipDollars(value) : "—",
+            "Net $",
+          ]}
           contentStyle={{
             backgroundColor: "#18181b",
             border: "1px solid #3f3f46",

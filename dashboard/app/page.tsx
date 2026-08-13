@@ -3,21 +3,30 @@ import RevenueChart from "./revenue-chart";
 
 export const dynamic = "force-dynamic";
 
+interface TotalsRow {
+  row_count: number;
+  total_units: number;
+  total_wholesale_dollars: number;
+}
+
+interface MonthlyRow {
+  month: string;
+  net_dollars: number;
+  sale_dollars: number;
+}
+
 export default async function Page() {
   const [{ data: totals }, { data: monthly }] = await Promise.all([
     supabase.rpc("invoice_lines_totals").single(),
     supabase.rpc("monthly_revenue"),
   ]);
 
-  const rowCount = totals?.row_count as number | null;
-  const totalUnits = totals?.total_units as number | null;
-  const totalDollars = totals?.total_wholesale_dollars as number | null;
+  const t = totals as TotalsRow | null;
+  const rowCount = t?.row_count ?? null;
+  const totalUnits = t?.total_units ?? null;
+  const totalDollars = t?.total_wholesale_dollars ?? null;
 
-  const monthlyRows = (monthly ?? []) as {
-    month: string;
-    net_dollars: number;
-    sale_dollars: number;
-  }[];
+  const monthlyRows = (monthly ?? []) as MonthlyRow[];
 
   return (
     <div>
