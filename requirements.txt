@@ -2,6 +2,8 @@
 pandas==2.3.3
 supabase==2.31.0
 python-dotenv==1.2.1
+xgboost==2.1.4
+scikit-learn==1.6.1
 
 # Pinned transitive dependencies
 annotated-types==0.7.0
@@ -18,6 +20,7 @@ httpcore==1.0.9
 httpx==0.28.1
 hyperframe==6.1.0
 idna==3.18
+joblib==1.5.3
 multidict==6.7.1
 numpy==2.0.2
 packaging==26.2
@@ -30,11 +33,13 @@ PyJWT==2.13.0
 python-dateutil==2.9.0.post0
 pytz==2026.2
 realtime==2.31.0
+scipy==1.13.1
 six==1.17.0
 storage3==2.31.0
 StrEnum==0.4.15
 supabase-auth==2.31.0
 supabase-functions==2.31.0
+threadpoolctl==3.6.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2026.2

@@ -47,6 +47,59 @@ def trailing_mean(values):
     return sum(values) / len(values) if values else 0.0
 
 
+def select_eligible(filled, train):
+    """Series with at least MIN_ACTIVE_WEEKS non-zero weeks before the holdout."""
+    return [
+        series
+        for series, weeks in filled.items()
+        if sum(1 for wk in train if weeks.get(wk, 0) != 0) >= MIN_ACTIVE_WEEKS
+    ]
+
+
+def baseline_points(filled, eligible, train, holdout):
+    """
+    Score both baseline variants over the holdout.
+
+    Returns {variant: [(actual, forecast), ...]} pooled across all series and
+    holdout weeks.
+    """
+    points = {"rolling": [], "static": []}
+
+    for series in eligible:
+        weeks = filled[series]
+        static_fc = trailing_mean([weeks.get(wk, 0) for wk in train[-LOOKBACK:]])
+
+        for wk in holdout:
+            actual = weeks.get(wk, 0)
+            prior = [wk - timedelta(days=7 * i) for i in range(1, LOOKBACK + 1)]
+            rolling_fc = trailing_mean([weeks.get(p, 0) for p in prior])
+
+            points["rolling"].append((actual, rolling_fc))
+            points["static"].append((actual, static_fc))
+
+    return points
+
+
+def pooled_metrics(points):
+    """
+    MAPE and WAPE pooled over (actual, forecast) pairs.
+
+    MAPE is defined only where actual != 0; WAPE uses every point. See
+    docs/phase-3-baseline.md for why WAPE is the primary metric.
+    """
+    abs_err = sum(abs(a - f) for a, f in points)
+    actual_sum = sum(abs(a) for a, _ in points)
+    nonzero = [(a, f) for a, f in points if a != 0]
+    pct_err = sum(abs(a - f) / abs(a) for a, f in nonzero)
+
+    return {
+        "mape": 100 * pct_err / len(nonzero) if nonzero else float("nan"),
+        "wape": 100 * abs_err / actual_sum if actual_sum else float("nan"),
+        "points": len(points),
+        "nonzero": len(nonzero),
+    }
+
+
 def main():
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -61,11 +114,7 @@ def main():
 
     # ── Select eligible series ────────────────────────────────────────────
 
-    eligible = []
-    for series, weeks in filled.items():
-        active = sum(1 for wk in train if weeks.get(wk, 0) != 0)
-        if active >= MIN_ACTIVE_WEEKS:
-            eligible.append(series)
+    eligible = select_eligible(filled, train)
 
     print(f"\n  Series in dataset:      {len(filled):,}")
     print(f"  Series evaluated:       {len(eligible):,}"
@@ -78,50 +127,22 @@ def main():
 
     # ── Score ─────────────────────────────────────────────────────────────
 
-    abs_err = {"rolling": 0.0, "static": 0.0}
-    pct_err = {"rolling": 0.0, "static": 0.0}
-    actual_sum = 0.0
-    points = 0
-    nonzero_points = 0
+    points = baseline_points(filled, eligible, train, holdout)
+    metrics = {name: pooled_metrics(pts) for name, pts in points.items()}
 
-    for series in eligible:
-        weeks = filled[series]
-
-        # Static forecast: mean of the last LOOKBACK training weeks.
-        static_fc = trailing_mean([weeks.get(wk, 0) for wk in train[-LOOKBACK:]])
-
-        for wk in holdout:
-            actual = weeks.get(wk, 0)
-
-            # Rolling forecast: the LOOKBACK weeks immediately before wk.
-            prior = [wk - timedelta(days=7 * i) for i in range(1, LOOKBACK + 1)]
-            rolling_fc = trailing_mean([weeks.get(p, 0) for p in prior])
-
-            points += 1
-            actual_sum += abs(actual)
-
-            for name, fc in (("rolling", rolling_fc), ("static", static_fc)):
-                err = abs(actual - fc)
-                abs_err[name] += err
-                if actual != 0:
-                    pct_err[name] += err / abs(actual)
-
-            if actual != 0:
-                nonzero_points += 1
-
-    print(f"\n  Holdout points:         {points:,}"
+    shape = metrics["rolling"]
+    print(f"\n  Holdout points:         {shape['points']:,}"
           f"  ({len(eligible):,} series × {len(holdout)} weeks)")
-    print(f"  Non-zero actuals:       {nonzero_points:,}"
-          f"  ({100 * nonzero_points / points:.1f}% — MAPE denominator)")
+    print(f"  Non-zero actuals:       {shape['nonzero']:,}"
+          f"  ({100 * shape['nonzero'] / shape['points']:.1f}% — MAPE denominator)")
 
     # ── Report ────────────────────────────────────────────────────────────
 
     print("\n── Accuracy ─────────────────────────────────────────────────────────\n")
     print(f"  {'variant':<10}{'MAPE':>12}{'WAPE':>12}")
     for name in ("rolling", "static"):
-        mape = 100 * pct_err[name] / nonzero_points if nonzero_points else float("nan")
-        wape = 100 * abs_err[name] / actual_sum if actual_sum else float("nan")
-        print(f"  {name:<10}{mape:>11.1f}%{wape:>11.1f}%")
+        m = metrics[name]
+        print(f"  {name:<10}{m['mape']:>11.1f}%{m['wape']:>11.1f}%")
 
     print("\n✅  Backtest complete. Nothing written to the DB.")
 
