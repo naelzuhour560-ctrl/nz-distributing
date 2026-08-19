@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import RevenueChart from "@/app/revenue-chart";
+import { churnStatus } from "@/lib/churn-status";
 
 export const dynamic = "force-dynamic";
 
@@ -80,36 +81,9 @@ export default async function StoreDetailPage({
   const monthlyRows = (monthly ?? []) as MonthlyRow[];
   const basketRows = ((basket ?? []) as BasketRow[]).slice(0, 25);
 
-  // Churn status
-  let churnLabel = "Insufficient order history";
-  let churnColor = "text-zinc-500";
-  if (c?.avg_days_between_orders != null) {
-    if (c.avg_days_between_orders < 2) {
-      // Near-daily orderer — use absolute days since last sale
-      if (c.days_since_last_sale <= 30) {
-        churnLabel = "Active";
-        churnColor = "text-green-400";
-      } else if (c.days_since_last_sale <= 90) {
-        churnLabel = "At risk";
-        churnColor = "text-amber-400";
-      } else {
-        churnLabel = "Likely churned";
-        churnColor = "text-red-400";
-      }
-    } else {
-      const ratio = c.days_since_last_sale / c.avg_days_between_orders;
-      if (ratio <= 3) {
-        churnLabel = "Active";
-        churnColor = "text-green-400";
-      } else if (ratio <= 10) {
-        churnLabel = "At risk";
-        churnColor = "text-amber-400";
-      } else {
-        churnLabel = "Likely churned";
-        churnColor = "text-red-400";
-      }
-    }
-  }
+  // Churn status — shared with /churn so the two pages cannot disagree about
+  // the same store, which they previously did.
+  const { label: churnLabel, color: churnColor } = churnStatus(c);
 
   return (
     <div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getDataRange } from "@/lib/data-range";
+import { churnStatus, OWNER_CUTOFF_DAYS } from "@/lib/churn-status";
 
 export const dynamic = "force-dynamic";
 
@@ -21,23 +22,6 @@ function fmt(n: number) {
   });
 }
 
-function churnStatus(r: ChurnRow): { label: string; color: string } {
-  if (r.avg_days_between_orders == null) {
-    return { label: "Insufficient history", color: "text-zinc-500" };
-  }
-  if (r.avg_days_between_orders < 2) {
-    if (r.days_since_last_sale <= 30)
-      return { label: "Active", color: "text-green-400" };
-    if (r.days_since_last_sale <= 90)
-      return { label: "At risk", color: "text-amber-400" };
-    return { label: "Likely churned", color: "text-red-400" };
-  }
-  const ratio = r.churn_ratio ?? r.days_since_last_sale / r.avg_days_between_orders;
-  if (ratio <= 3) return { label: "Active", color: "text-green-400" };
-  if (ratio <= 10) return { label: "At risk", color: "text-amber-400" };
-  return { label: "Likely churned", color: "text-red-400" };
-}
-
 export default async function ChurnPage() {
   const [{ data }, range] = await Promise.all([
     supabase.rpc("churn_overview"),
@@ -51,6 +35,12 @@ export default async function ChurnPage() {
       <p className="text-sm text-zinc-500 mb-6">
         All stores ranked by churn risk (days since last sale relative to normal
         order cadence). Measured to the dataset&apos;s last date, {range.lastDate}.
+      </p>
+      <p className="text-sm text-zinc-500 mb-6 max-w-3xl">
+        A store counts as churned once it has been silent for more than{" "}
+        {OWNER_CUTOFF_DAYS} days — the cut-off the owner actually works to —
+        or once it has been quiet more than 3× its own normal gap between
+        orders, whichever comes first.
       </p>
 
       <div className="overflow-x-auto">
