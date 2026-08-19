@@ -26,18 +26,41 @@ VALID_TRANSACTION_TYPES = {"Sale", "Return", "Buyback"}
 DATE_FLOOR = "2025-01-01"
 
 
-def fetch_distinct(sb, table, column):
-    """Fetch all distinct values of a column, paginated."""
-    values = set()
+PAGE_SIZE = 1000
+
+
+def paginate(sb, table, columns, order_by="id"):
+    """
+    Yield every row of a table, one page at a time.
+
+    Two things this has to get right, both of which were previously wrong:
+
+    - PostgREST caps a response at 1,000 rows however wide the requested range
+      is, so "returned fewer rows than asked for" does NOT mean end-of-table.
+      Advance by what actually came back and stop only on an empty page.
+      Treating a short page as the end scanned 1,000 of 139,102 rows and every
+      check built on it passed vacuously.
+    - Order by a unique column, or the pages are not a stable window over the
+      table and rows can repeat or be skipped between requests.
+    """
     offset = 0
     while True:
-        r = sb.table(table).select(column).range(offset, offset + 4999).execute()
-        for row in r.data:
-            values.add(row[column])
-        if len(r.data) < 5000:
+        r = (
+            sb.table(table)
+            .select(columns)
+            .order(order_by)
+            .range(offset, offset + PAGE_SIZE - 1)
+            .execute()
+        )
+        if not r.data:
             break
-        offset += 5000
-    return values
+        yield from r.data
+        offset += len(r.data)
+
+
+def fetch_distinct(sb, table, column, order_by="id"):
+    """Fetch all distinct values of a column, paginated."""
+    return {row[column] for row in paginate(sb, table, column, order_by)}
 
 
 def main():
@@ -62,19 +85,38 @@ def main():
 
     # ── Load reference sets ───────────────────────────────────────────────
 
-    all_upcs = fetch_distinct(sb, "products", "upc")
+    # products is keyed on upc — it has no id column to order by.
+    all_upcs = fetch_distinct(sb, "products", "upc", order_by="upc")
     today = date.today().isoformat()
+
+    # ── CRITICAL: scan coverage ───────────────────────────────────────────
+    #
+    # Every whole-table check below is only as good as the pagination feeding
+    # it. Verify the scan reaches the end before trusting anything built on it:
+    # a scan that stops early makes its checks pass by not looking.
+
+    print("[CRITICAL] Scan coverage\n")
+
+    for table in ("invoice_lines", "order_lines"):
+        scanned = sum(1 for _ in paginate(sb, table, "id"))
+        total = sb.table(table).select("id", count="exact").execute().count
+        if scanned != total:
+            critical(f"{table} scan coverage",
+                     f"pagination reached {scanned:,} of {total:,} rows")
+        else:
+            ok(f"{table} — full scan reaches all {total:,} rows")
 
     # ── CRITICAL: invoice_lines.upc → products ───────────────────────────
 
-    print("[CRITICAL] Referential integrity\n")
+    print("\n[CRITICAL] Referential integrity\n")
 
     inv_upcs = fetch_distinct(sb, "invoice_lines", "upc")
     orphan_inv = inv_upcs - all_upcs
     if orphan_inv:
         critical("invoice_lines.upc orphans", f"{len(orphan_inv)} UPCs not in products: {sorted(orphan_inv)[:10]}")
     else:
-        ok("invoice_lines.upc — all UPCs exist in products")
+        ok(f"invoice_lines.upc — all {len(inv_upcs)} distinct UPCs exist in "
+           f"products ({len(all_upcs)} products)")
 
     # ── CRITICAL: order_lines.upc → products ─────────────────────────────
 
@@ -83,7 +125,7 @@ def main():
     if orphan_ord:
         critical("order_lines.upc orphans", f"{len(orphan_ord)} UPCs not in products: {sorted(orphan_ord)[:10]}")
     else:
-        ok("order_lines.upc — all UPCs exist in products")
+        ok(f"order_lines.upc — all {len(ord_upcs)} distinct UPCs exist in products")
 
     # ── CRITICAL: invoice_lines.location_id valid ─────────────────────────
 
@@ -121,7 +163,7 @@ def main():
     if bad_tt:
         critical("transaction_type invalid", f"unexpected values: {sorted(bad_tt)}")
     else:
-        ok("transaction_type — all values are Sale, Return, or Buyback")
+        ok(f"transaction_type — all values valid, saw {sorted(v for v in inv_tts if v)}")
 
     # ── CRITICAL: date range ──────────────────────────────────────────────
 
@@ -170,15 +212,9 @@ def main():
     print("\n[WARNING] Duplicate detection\n")
 
     seen = {}
-    offset = 0
-    while True:
-        r = sb.table("invoice_lines").select("invoice_number,upc,units,calendar_date").range(offset, offset + 4999).execute()
-        for row in r.data:
-            key = (row["invoice_number"], row["upc"], row["units"], row["calendar_date"])
-            seen[key] = seen.get(key, 0) + 1
-        if len(r.data) < 5000:
-            break
-        offset += 5000
+    for row in paginate(sb, "invoice_lines", "invoice_number,upc,units,calendar_date"):
+        key = (row["invoice_number"], row["upc"], row["units"], row["calendar_date"])
+        seen[key] = seen.get(key, 0) + 1
     dupe_count = sum(v - 1 for v in seen.values() if v > 1)
     dupe_keys = sum(1 for v in seen.values() if v > 1)
     if dupe_count:
