@@ -33,19 +33,19 @@ BATCH_SIZE = 1000
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(ROOT, "data")
 
-# Totals from the last blessed load (May 2026 export). Reference points for the
-# INFO comparison only — never a pass/fail gate. A fresh export legitimately
+# Totals from the last blessed load (August 2026 export). Reference points for
+# the INFO comparison only — never a pass/fail gate. A fresh export legitimately
 # differs, and gating on these made every refresh fail. Update when a load is
 # reviewed and blessed.
 PREVIOUS_LOAD = {
-    "products": 218,
-    "stores": 103,
-    "invoice_rows": 119015,
-    "invoice_units": 1352000,
-    "invoice_dollars": 2797507.0,
-    "order_rows": 20781,
-    "order_cases": 98891,
-    "order_cost": 2498556.0,
+    "products": 224,
+    "stores": 107,
+    "invoice_rows": 139102,
+    "invoice_units": 1541361,
+    "invoice_dollars": 3199656.96,
+    "order_rows": 23644,
+    "order_cases": 109778,
+    "order_cost": 2801684.18,
 }
 
 # Money columns are stored at 2 decimal places. orders.csv carries up to 15,
