@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { getDataRange } from "@/lib/data-range";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,10 @@ function churnStatus(r: ChurnRow): { label: string; color: string } {
 }
 
 export default async function ChurnPage() {
-  const { data } = await supabase.rpc("churn_overview");
+  const [{ data }, range] = await Promise.all([
+    supabase.rpc("churn_overview"),
+    getDataRange(),
+  ]);
   const rows = (data ?? []) as ChurnRow[];
 
   return (
@@ -46,7 +50,7 @@ export default async function ChurnPage() {
       <h2 className="text-2xl font-bold mb-2">Churn Overview</h2>
       <p className="text-sm text-zinc-500 mb-6">
         All stores ranked by churn risk (days since last sale relative to normal
-        order cadence). Measured to the dataset&apos;s last date, June 2026.
+        order cadence). Measured to the dataset&apos;s last date, {range.lastDate}.
       </p>
 
       <div className="overflow-x-auto">

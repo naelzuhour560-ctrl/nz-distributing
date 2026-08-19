@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { getDataRange } from "@/lib/data-range";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,10 @@ function fmt(n: number) {
 }
 
 export default async function StoresPage() {
-  const { data } = await supabase.rpc("top_stores").limit(25);
+  const [{ data }, range] = await Promise.all([
+    supabase.rpc("top_stores").limit(25),
+    getDataRange(),
+  ]);
   const rows = (data ?? []) as StoreRow[];
 
   return (
@@ -30,7 +34,7 @@ export default async function StoresPage() {
       <p className="text-sm text-zinc-500 mb-6">
         Grouped by store name per route. Chain names (e.g. Food Lion) appear
         once per route; individual locations within the same route can&apos;t be
-        separated from invoice data. Figures cover Jan 2025 – Jun 2026.
+        separated from invoice data. Figures cover {range.label}.
       </p>
 
       <div className="overflow-x-auto">

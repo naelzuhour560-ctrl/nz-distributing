@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getDataRange } from "@/lib/data-range";
 
 export const dynamic = "force-dynamic";
 
@@ -20,14 +21,17 @@ function fmt(n: number) {
 }
 
 export default async function ProductsPage() {
-  const { data } = await supabase.rpc("top_products").limit(25);
+  const [{ data }, range] = await Promise.all([
+    supabase.rpc("top_products").limit(25),
+    getDataRange(),
+  ]);
   const rows = (data ?? []) as ProductRow[];
 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-2">Top Products by Net Revenue</h2>
       <p className="text-sm text-zinc-500 mb-6">
-        Ranked across all routes. Figures cover Jan 2025 – Jun 2026.
+        Ranked across all routes. Figures cover {range.label}.
       </p>
 
       <div className="overflow-x-auto">

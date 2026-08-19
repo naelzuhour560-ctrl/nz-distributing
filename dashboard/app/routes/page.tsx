@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getDataRange } from "@/lib/data-range";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,10 @@ function fmt(n: number) {
 }
 
 export default async function RoutesPage() {
-  const { data } = await supabase.rpc("revenue_by_route");
+  const [{ data }, range] = await Promise.all([
+    supabase.rpc("revenue_by_route"),
+    getDataRange(),
+  ]);
   const rows = (data ?? []) as RouteRow[];
 
   // Pivot: one entry per route
@@ -56,7 +60,7 @@ export default async function RoutesPage() {
     <div>
       <h2 className="text-2xl font-bold mb-2">Revenue by Route</h2>
       <p className="text-sm text-zinc-500 mb-6">
-        Figures cover the full loaded period (Jan 2025 – Jun 2026)
+        Figures cover the full loaded period ({range.label})
       </p>
 
       <div className="overflow-x-auto">
