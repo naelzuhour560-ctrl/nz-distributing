@@ -12,6 +12,7 @@ const links = [
   { href: "/churn", label: "Churn" },
   { href: "/declining", label: "Declining" },
   { href: "/promotions", label: "Promotions" },
+  { href: "/forecasts", label: "Forecasts" },
 ];
 
 export default function NavLinks() {
