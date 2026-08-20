@@ -1,0 +1,64 @@
+name: Weekly forecast and reminders
+
+# Publishes next week's forecast, then drafts a reorder reminder per store.
+# Both land in the DB; nothing is sent to a store. The owner still reviews and
+# sends from /reminders (docs/phase-4-reminders.md).
+#
+# Replaces the manual Monday sequence that Phase 4's soft launch flagged as the
+# operational gap: without these two scripts running, /reminders silently keeps
+# serving last week's drafts.
+
+on:
+  schedule:
+    # Mondays 10:00 UTC, ahead of the owner's Monday review.
+    # GitHub cron is UTC only (no DST shift) and is best-effort — runs can be
+    # delayed under load. It is also disabled automatically after 60 days with
+    # no repo activity, so a quiet stretch silently stops the drafts.
+    - cron: "0 10 * * 1"
+  workflow_dispatch:
+
+# A manual run during a scheduled one would double-write the same week.
+# Queue instead of running concurrently; never cancel a run mid-way, since
+# generate_reminders.py upserts per store and has already paid for that work.
+concurrency:
+  group: weekly-forecast
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # The Linux xgboost wheel vendors its own libgomp under xgboost.libs/,
+      # so the OpenMP workaround needed on macOS (docs/phase-3-baseline.md §12)
+      # does not apply here and must not be added.
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Order matters. generate_reminders.py drafts for whatever week
+      # forecast_next_week() returns, and the reminders upsert key includes
+      # week_start — so running it without a fresh --write first redrafts the
+      # same week instead of advancing. If this step fails the job stops here,
+      # which is intended: better no new drafts than drafts off a stale
+      # forecast.
+      - name: Publish next week's forecast
+        run: python scripts/forecast_model.py --write
+
+      - name: Draft reorder reminders
+        run: python scripts/generate_reminders.py
