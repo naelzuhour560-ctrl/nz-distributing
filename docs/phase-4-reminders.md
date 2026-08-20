@@ -135,11 +135,68 @@ The forecast week is `2026-08-17`, which `docs/phase-3-baseline.md` §9 flags as
 
 ---
 
-## 6. Where to Go Next
+## 6. Soft Launch — 2026-08-20
 
-Read §4's ratios first — they should decide whether any of this is worth building.
+First real use. The owner reviewed the drafts on `/reminders`, picked the stores he wanted, texted them from his own phone, and recorded the statuses.
 
+### What the table shows
+
+| | |
+|---|---|
+| Reminders drafted | 63 |
+| Approved and sent | **6** |
+| Still `draft` | 57 |
+| Share of forecast units covered by the 6 | **50.0%** (7,269 of 14,541) |
+
+| Store | Route | Forecast units | `approved_at` |
+|---|---|---|---|
+| WALMART SUP | 38265 | 1,638.7 | 17:07:36 |
+| FOOD LION | 1483 | 1,629.9 | 17:07:44 |
+| FOOD LION | 38265 | 1,546.8 | 17:07:47 |
+| FOOD LION | 2140 | 1,345.9 | 17:07:50 |
+| WALMART SUP | 2140 | 1,036.9 | 17:07:55 |
+| FAMILY DOL | 38260 | 70.9 | 16:57:37 |
+
+> ⚠️ **The owner recalls sending 5; the table records 6.** The top five were approved in one 20-second burst (17:07:36 → 17:07:55) and are exactly the five largest stores by forecast. The `FAMILY DOL` row sits ten minutes earlier at 16:57:37 and is two orders of magnitude smaller — it looks like a first click to see what the button did, not a sixth deliberate send. **Confirm which it was before treating these counts as a baseline**, since §4 makes them the measure of the whole phase. If it was a trial, reset that row to `draft`.
+
+### What it tells us
+
+- **Approve → sent in one sitting.** All six carry an `approved_at` and all six are at `sent`; none stopped at `approved`. The workflow is a single pass, not two — the two-step lifecycle is recording state, not pacing work.
+- **He worked strictly top-down by forecast.** The five deliberate sends are the top five stores by predicted units, in order. That is how `/reminders` sorts, so the sort matches how the tool is actually used; do not change it without cause.
+- **6 of 63 reminders covered half the forecast volume.** A small number of high-volume stores carries most of the book, which is worth knowing before optimizing draft quality across the long tail.
+- **The near-duplicate problem hit on day one.** Four of the five deliberate sends were same-chain: three Food Lions and two Walmarts, all receiving near-identical messages (§5). This is no longer a theoretical risk — it happened in the first real use, to the highest-value stores on the route.
+
+### Owner feedback
+
+**Would use it weekly.** The drafts were good enough to send with no rewriting.
+
+**The gap was not the drafts — it was not knowing the routine.** The tool did not say when to use it or in what order. Now defined:
+
+> **Monday:** open `/reminders` → review the fresh drafts → approve the ones to send → copy → text the store → mark sent.
+
+### Known operational gap — flagged for Phase 5
+
+**The Monday routine above silently assumes fresh drafts, and nothing produces them.** Both steps are manual and order-dependent:
+
+```
+python scripts/forecast_model.py --write      # publish next week's forecast
+python scripts/generate_reminders.py          # draft reminders from it
+```
+
+If neither is run, `/reminders` still renders — showing **last week's drafts, with no indication they are stale**. The page displays the week it is showing, but nothing flags that the week is old, and a Monday routine built on "open the page and review" will walk straight into it. Re-running only `generate_reminders.py` redrafts the same week rather than advancing, because the upsert key includes `week_start`.
+
+This is the handoff problem for Phase 5: either automate both steps on a schedule, or make `/reminders` refuse to present drafts whose week has passed.
+
+---
+
+## 7. Where to Go Next
+
+Read §4's ratios first — they should decide whether any of this is worth building. After the soft launch (§6) the standing count is 6 sent of 63 drafted, pending the 5-vs-6 confirmation.
+
+Ordered by what the first real use actually surfaced:
+
+- **Close the staleness gap (Phase 5).** The Monday routine assumes fresh drafts and nothing produces them. Automate `--write` → `generate_reminders.py` on a schedule, or make `/reminders` refuse to present drafts for a week that has passed. Everything else on this list is cosmetic next to a routine that quietly re-serves last week's messages.
+- **Vary the drafts for same-chain stores.** No longer theoretical — four of five soft-launch sends were near-identical messages to three Food Lions and two Walmarts, the highest-value stores on the route. Pass the model the other drafts for that chain, or give it store-specific context it does not currently get (last order date, how long they have been a customer).
+- **Add a display-name column to `stores`** to fix the truncated names at the source, before another "Hey Family Dol!" goes out.
 - **Add a `sent_at` column** so time-to-send is measurable, not just final state.
-- **Add a display-name column to `stores`** to fix the truncated names at the source.
-- **Vary the drafts for same-chain stores**, either by passing the model the other drafts for that chain, or by giving it store-specific context it does not currently get (last order date, how long they have been a customer).
 - **Only then consider automating the send** — and only if draft→approved is high enough to justify it.
