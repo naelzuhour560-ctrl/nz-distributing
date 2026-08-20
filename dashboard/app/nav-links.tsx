@@ -13,6 +13,7 @@ const links = [
   { href: "/declining", label: "Declining" },
   { href: "/promotions", label: "Promotions" },
   { href: "/forecasts", label: "Forecasts" },
+  { href: "/reminders", label: "Reminders" },
 ];
 
 export default function NavLinks() {
