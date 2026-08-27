@@ -40,7 +40,7 @@ A data platform for a McKee Foods / Little Debbie wholesale distribution busines
     Mondays 10:00 UTC → forecast_model.py --write → generate_reminders.py
 ```
 
-**Data flow in words.** Incorta CSVs are exported by hand and dropped in `data/`. `ingest.py` clears and reloads the line tables, then gates the load on CSV-vs-database consistency. The dashboard never queries tables directly for anything non-trivial — it calls Postgres functions (RPCs) whose definitions are exported to `dashboard/sql/functions.sql`. `forecast_model.py --write` trains on the full history and writes next week's per-store predictions to `forecasts`. `generate_reminders.py` reads those, keeps the stores worth contacting, and asks Claude for a short reorder message per store, saving each as a **draft**. The owner reviews drafts on `/reminders`. A GitHub Action runs the forecast and drafting steps weekly so the drafts are fresh without anyone running a script.
+**Data flow in words.** Incorta CSVs are exported by hand and dropped in `data/`. `ingest.py` clears and reloads the line tables, then gates the load on CSV-vs-database consistency. The dashboard never queries tables directly for anything non-trivial — it calls Postgres functions (RPCs) whose definitions are exported to `dashboard/sql/functions.sql`. `forecast_model.py --write` trains on the full history and writes next week's per-store predictions to `forecasts`. `generate_reminders.py` reads those, keeps the stores worth contacting, and asks Claude for a short reorder message per store, saving each as a **draft**. The owner reviews drafts on `/reminders`. A GitHub Action runs the forecast and drafting steps weekly so the drafts are fresh without anyone running a script. **The Action is live** — its first real run was **2026-08-26**, green in 4m00s (§4.3, §4.5).
 
 **Current scale**
 
@@ -138,6 +138,22 @@ The same credentials are needed in four places. There is no shared secret store;
 
 `DB_PASSWORD` is for direct Postgres access, needed only to re-export `dashboard/sql/functions.sql`. Note that `db.<ref>.supabase.co` no longer resolves for this project; the working host is the newer pooler, `aws-1-us-east-1.pooler.supabase.com`, user `postgres.<project-ref>`.
 
+#### Rotation — last done 2026-08-26
+
+`SUPABASE_SECRET_KEY` was rotated on **2026-08-26** to a new key named **`platform_2026_08`**. The **older ingestion keys were deleted**, not left disabled — anything still holding one fails outright rather than degrading quietly, which is the intended behaviour.
+
+All three consumers were updated and verified in the same session:
+
+| Consumer | Verified by | Result |
+|---|---|---|
+| Local `.env` | `python scripts/quality_check.py` | pass |
+| Vercel env | production dashboard load | pass |
+| GitHub Actions secret | Actions run **#1** | green, **4m00s** |
+
+Because deletion is immediate and there is no shared secret store, **rotation is an all-at-once job across every location in the table above, not a rolling one.** A consumer missed during a rotation does not warn — it starts failing on its next run, which for the weekly Action means up to seven days before anyone notices.
+
+> **Check `dashboard/.env.local` before local dashboard work.** It carries its own copy of `SUPABASE_SECRET_KEY` for `npm run dev` and was not part of the three verified above. If it still holds a deleted key, local dev fails while the deployed dashboard is fine — the two read different copies.
+
 ### 4.4 Local setup
 
 ```bash
@@ -151,7 +167,12 @@ cd dashboard && npm install && npm run dev
 
 ### 4.5 Known operational gaps
 
-- **The weekly Action is not live yet.** It requires a GitHub token with `workflow` scope to push, and the three repository secrets above to be set. Until both are done, drafts do not regenerate and `/reminders` will keep serving a stale week with no warning.
+- **Pushing anything under `.github/workflows/` needs a PAT with `workflow` scope.** The stored git credential did not have it, and GitHub rejects the *entire push* — not just the offending commit — with `refusing to allow a Personal Access Token to create or update workflow ... without workflow scope`. This is not a merge conflict and re-running the push does not help; the token has to be regenerated with **`repo` + `workflow`** and the stored credential replaced.
+
+  This cost six days. The workflow was committed **2026-08-20** and could not leave the machine; it reached GitHub only on **2026-08-26**, once the token was rotated. Local `git log` showed the commit the whole time, so nothing looked wrong until someone checked the remote. **A commit that exists locally is not a commit that shipped** — after touching a workflow file, confirm against `origin` rather than the local branch.
+
+- **The Action is live, but a silently stopped Action still serves stale drafts.** One run has succeeded (2026-08-26). GitHub disables a scheduled workflow automatically after **60 days with no repository activity**, and its cron is best-effort under load. If the Action stops, `/reminders` does not go blank or warn — it keeps rendering last week's drafts, which is the exact failure mode the workflow was written to remove. Until the page refuses to present a week that has passed, the check is manual: confirm the Actions tab shows a recent green run.
+
 - **The Phase 1 base tables have no committed DDL.** `dashboard/sql/functions.sql` recreates the RPCs and the `forecasts`/`reminders` tables, but `routes`, `products`, `stores`, `invoice_lines` and `order_lines` exist only as prose in `docs/phase-1.md` §2. A true rebuild-from-scratch is not currently possible.
 
 ---
